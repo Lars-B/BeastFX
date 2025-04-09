@@ -32,21 +32,6 @@ public class TAGui extends Console {
 	}));
 	System.setErr(err);
 
-      java.net.URL url = TreeAnnotator.class.getClassLoader().getResource("../tools/images/utility.png");
-
-      final String versionString = TreeAnnotator.version.getVersionString();
-      String nameString = "TreeAnnotator " + versionString;
-      String aboutString = "<html><center><p>" + versionString + ", " + TreeAnnotator.version.getDateString() + "</p>" +
-              "<p>by<br>" +
-              "Andrew Rambaut and Alexei J. Drummond</p>" +
-              "<p>Institute of Evolutionary Biology, University of Edinburgh<br>" +
-              "<a href=\"mailto:a.rambaut@ed.ac.uk\">a.rambaut@ed.ac.uk</a></p>" +
-              "<p>Department of Computer Science, University of Auckland<br>" +
-              "<a href=\"mailto:alexei@cs.auckland.ac.nz\">alexei@cs.auckland.ac.nz</a></p>" +
-              "<p>Part of the BEAST package:<br>" +
-              "<a href=\"http://beast.bio.ed.ac.uk/\">http://beast.bio.ed.ac.uk/</a></p>" +
-              "</center></html>";
-
       Log.info = System.out;
       Log.err = System.err;
 
