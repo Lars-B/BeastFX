@@ -10,7 +10,7 @@ import beastfx.app.treeannotator.TreeAnnotator;
 import beastfx.app.treeannotator.TreeAnnotator.TreeSet;
 
 @Description("Service for setting topology when running TreeAnnotator")
-public interface TopologySettingService {
+public interface TopologySettingService extends Citable{
 	
 	/** set node heights for tree to be annotated **/
 	Tree setTopology(TreeSet trees, PrintStream progressStream, TreeAnnotator annotator) throws IOException;

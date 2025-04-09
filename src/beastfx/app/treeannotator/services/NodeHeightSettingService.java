@@ -10,7 +10,7 @@ import beast.base.evolution.tree.Tree;
 import beastfx.app.treeannotator.TreeAnnotator;
 
 @Description("Service for setting node heights when running TreeAnnotator")
-public interface NodeHeightSettingService {
+public interface NodeHeightSettingService extends Citable {
 	
 	/** set node heights for tree to be annotated **/
 	default void setNodeHeights(Tree tree, PrintStream progressStream, TreeAnnotator treeAnnotator) throws IOException {};
