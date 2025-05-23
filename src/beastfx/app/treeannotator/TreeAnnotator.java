@@ -26,13 +26,6 @@
 package beastfx.app.treeannotator;
 
 
-import java.io.*;
-import java.util.*;
-
-import beastfx.app.tools.Application;
-import beastfx.app.treeannotator.services.NodeHeightSettingService;
-import beastfx.app.treeannotator.services.TopologySettingService;
-import beastfx.app.treeannotator.services.UserTargetTreeTopologyService;
 import beast.base.core.Description;
 import beast.base.core.Input;
 import beast.base.core.Log;
@@ -40,34 +33,39 @@ import beast.base.evolution.alignment.TaxonSet;
 import beast.base.evolution.tree.Node;
 import beast.base.evolution.tree.Tree;
 import beast.base.evolution.tree.TreeParser;
-import beast.base.evolution.tree.TreeUtils;
 import beast.base.parser.NexusParser;
-import beast.base.util.CollectionUtils;
 import beast.base.util.DiscreteStatistics;
 import beast.base.util.HeapSort;
 import beast.pkgmgmt.BEASTClassLoader;
 import beast.pkgmgmt.BEASTVersion;
 import beast.pkgmgmt.PackageManager;
+import beastfx.app.tools.Application;
+import beastfx.app.treeannotator.services.NodeHeightSettingService;
+import beastfx.app.treeannotator.services.TopologySettingService;
+import beastfx.app.treeannotator.services.UserTargetTreeTopologyService;
+
+import java.io.*;
+import java.util.*;
 
 /**
  * @author Alexei Drummond
  * @author Andrew Rambaut
- * 
+ * <p>
  * TreeAnnotator ported from BEAST 1
  */
 @Description("TreeAnnotator is a tool for summarising tree sets in by a summary tree and annotating the branches with summary statistics as metadata")
 public class TreeAnnotator extends beast.base.inference.Runnable {
-    final public Input<String> heightInput = new Input<> ("height", "name of the method for estimating node heights", "CA");
+    final public Input<String> heightInput = new Input<>("height", "name of the method for estimating node heights", "CA");
     final public Input<Integer> burnInPercentageInput = new Input<>("burnin", "percentage of trees to used as burn-in (and will be ignored)", 10);
     final public Input<Double> limitInput = new Input<>("limit", "the minimum posterior probability for a node to be annotated", 0.0);
-    final public Input<String> topologyInput = new Input<> ("topology", "name of the method for determining topology", "MCC");
-    final public Input<String> targetInput = new Input<> ("target", "target_file_name, specifies a user target tree to be annotated");
-    final public Input<Boolean> forceDiscreteInput = new Input<> ("forceDiscrete", "forces integer traits to be treated as discrete traits.");
-    final public Input<Boolean> lowMemInput = new Input<> ("lowMem", "use less memory, which is a bit slower.");
-    final public Input<Double> hpd2DInput = new Input<> ("hpd2D", "the HPD interval to be used for the bivariate traits");
-    final public Input<Boolean> nohpd2DInput = new Input<> ("nohpd2D", "suppress calculation of HPD intervals for the bivariate traits");
-    final public Input<Boolean> noSAInput = new Input<> ("noSA", "interpret the tree set as begin from a not being from a sampled ancestor analysis, even if there are zero branch lengths in the tree set");
-    final public Input<List<String>> versionFileInput = new Input<> ("version_file", "Provide a version file containing a list of services to explicitly allow. (Useful for package development.)", new ArrayList<>());
+    final public Input<String> topologyInput = new Input<>("topology", "name of the method for determining topology", "MCC");
+    final public Input<String> targetInput = new Input<>("target", "target_file_name, specifies a user target tree to be annotated");
+    final public Input<Boolean> forceDiscreteInput = new Input<>("forceDiscrete", "forces integer traits to be treated as discrete traits.");
+    final public Input<Boolean> lowMemInput = new Input<>("lowMem", "use less memory, which is a bit slower.");
+    final public Input<Double> hpd2DInput = new Input<>("hpd2D", "the HPD interval to be used for the bivariate traits");
+    final public Input<Boolean> nohpd2DInput = new Input<>("nohpd2D", "suppress calculation of HPD intervals for the bivariate traits");
+    final public Input<Boolean> noSAInput = new Input<>("noSA", "interpret the tree set as begin from a not being from a sampled ancestor analysis, even if there are zero branch lengths in the tree set");
+    final public Input<List<String>> versionFileInput = new Input<>("version_file", "Provide a version file containing a list of services to explicitly allow. (Useful for package development.)", new ArrayList<>());
 
     public final static BEASTVersion version = new BEASTVersion();
 
@@ -78,66 +76,71 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
     static boolean processSA = true;
 
     private boolean SAmode = false;
-    
+
     public NodeHeightSettingService nodeHeightSettingService;
     public TopologySettingService topologySettingService;
     private int burninPercentage;
     // arguments that do not set any input option
-	public Input<List<File>> filesInput = new  Input<> ("file", "Specify the input filename and (optional) output file name" , new ArrayList<>());
+    public Input<List<File>> filesInput = new Input<>("file", "Specify the input filename and (optional) output file name", new ArrayList<>());
 
     public abstract class TreeSet {
-    	public abstract boolean hasNext();
-    	public abstract Tree next() throws IOException;
-    	public abstract void reset() throws IOException;
+        public abstract boolean hasNext();
+
+        public abstract Tree next() throws IOException;
+
+        public abstract void reset() throws IOException;
 
 
-    	public String inputFileName;
+        public String inputFileName;
         public int burninCount = 0;
         public int totalTrees = 0;
         public boolean isNexus = true;
 
-        /** determine number of trees in the file,
-    	 * and number of trees to skip as burnin
-    	 * @throws IOException
-    	 * @throws FileNotFoundException **/
-    	void countTrees(int burninPercentage) throws IOException  {
+        /**
+         * determine number of trees in the file,
+         * and number of trees to skip as burnin
+         *
+         * @throws IOException
+         * @throws FileNotFoundException
+         **/
+        void countTrees(int burninPercentage) throws IOException {
             BufferedReader fin = new BufferedReader(new FileReader(new File(inputFileName)));
             if (!fin.ready()) {
-            	throw new IOException("File appears empty");
+                throw new IOException("File appears empty");
             }
-        	String str = fin.readLine();
+            String str = fin.readLine();
             if (!str.toUpperCase().trim().startsWith("#NEXUS")) {
-            	// the file contains a list of Newick trees instead of a list in Nexus format
-            	isNexus = false;
-            	if (str.trim().length() > 0) {
-            		totalTrees = 1;
-            	}
+                // the file contains a list of Newick trees instead of a list in Nexus format
+                isNexus = false;
+                if (str.trim().length() > 0) {
+                    totalTrees = 1;
+                }
             }
             while (fin.ready()) {
-            	str = fin.readLine();
+                str = fin.readLine();
                 if (isNexus) {
                     if (str.trim().toLowerCase().startsWith("tree ")) {
-                    	totalTrees++;
+                        totalTrees++;
                     }
                 } else if (str.trim().length() > 0) {
-            		totalTrees++;
+                    totalTrees++;
                 }
             }
             fin.close();
 
-            burninCount = Math.max(0, (burninPercentage * totalTrees)/100);
+            burninCount = Math.max(0, (burninPercentage * totalTrees) / 100);
 
             progressStream.println("Processing " + (totalTrees - burninCount) + " trees from file" +
                     (burninPercentage > 0 ? " after ignoring first " + burninPercentage + "% = " + burninCount + " trees." : "."));
-		}
+        }
 
-    }    
-    
+    }
+
     public class FastTreeSet extends TreeSet {
-    	int current = 0;
-    	Tree [] trees;
+        int current = 0;
+        Tree[] trees;
 
-    	public FastTreeSet(String inputFileName, int burninPercentage) throws IOException  {
+        public FastTreeSet(String inputFileName, int burninPercentage) throws IOException {
             this.inputFileName = inputFileName;
             countTrees(burninPercentage);
 
@@ -155,10 +158,10 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 
                     String id = "" + current++;
                     try {
-                    	int i = line.indexOf("(");
-    	                id = line.substring(5, i).split("=")[0].trim();
+                        int i = line.indexOf("(");
+                        id = line.substring(5, i).split("=")[0].trim();
                     } catch (Exception e) {
-                    	// ignore
+                        // ignore
                     }
 
                     Tree thisTree;
@@ -168,7 +171,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                         thisTree = new TreeParser(null, line, 1, false);
                     }
                     thisTree.setID(id);
-                    
+
                     parsedTrees.add(thisTree);
                 }
                 fin.close();
@@ -176,31 +179,31 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
             }
 
             int treesToUse = parsedTrees.size() - burninCount;
-	      	trees = new Tree[treesToUse];
-            for (int i=burninCount; i<parsedTrees.size(); i++)
-                trees[i-burninCount] = parsedTrees.get(i);
-		}
+            trees = new Tree[treesToUse];
+            for (int i = burninCount; i < parsedTrees.size(); i++)
+                trees[i - burninCount] = parsedTrees.get(i);
+        }
 
-		@Override
-		public boolean hasNext() {
-			return current < trees.length;
-		}
+        @Override
+        public boolean hasNext() {
+            return current < trees.length;
+        }
 
-		@Override
-		public Tree next()  {
-			return trees[current++];
-		}
+        @Override
+        public Tree next() {
+            return trees[current++];
+        }
 
-		@Override
-		public void reset()  {
-			current = 0;
-		}
+        @Override
+        public void reset() {
+            current = 0;
+        }
     }
-    
+
     public class MemoryFriendlyTreeSet extends TreeSet {
-//    	Tree [] trees;
-    	int current = 0;
-    	int lineNr;
+        //    	Tree [] trees;
+        int current = 0;
+        int lineNr;
         public Map<String, String> translationMap = null;
         public List<String> taxa;
 
@@ -209,32 +212,32 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 
         BufferedReader fin;
 
-        public MemoryFriendlyTreeSet(String inputFileName, int burninPercentage) throws IOException  {
-    		this.inputFileName = inputFileName;
-    		countTrees(burninPercentage);
+        public MemoryFriendlyTreeSet(String inputFileName, int burninPercentage) throws IOException {
+            this.inputFileName = inputFileName;
+            countTrees(burninPercentage);
 
             fin = new BufferedReader(new FileReader(inputFileName));
-    	}
+        }
 
 
-    	@Override
-    	public void reset() throws FileNotFoundException  {
-    		current = 0;
+        @Override
+        public void reset() throws FileNotFoundException {
+            current = 0;
             fin = new BufferedReader(new FileReader(new File(inputFileName)));
             lineNr = 0;
             try {
                 if (isNexus) {
-	                while (fin.ready()) {
-	                    final String str = nextLine();
-	                    if (str == null) {
-	                        return;
-	                    }
-	                    final String lower = str.toLowerCase();
-	                    if (lower.matches("^\\s*begin\\s+trees;\\s*$")) {
-	                        parseTreesBlock();
-	                        return;
-	                    }
-	                }
+                    while (fin.ready()) {
+                        final String str = nextLine();
+                        if (str == null) {
+                            return;
+                        }
+                        final String lower = str.toLowerCase();
+                        if (lower.matches("^\\s*begin\\s+trees;\\s*$")) {
+                            parseTreesBlock();
+                            return;
+                        }
+                    }
                 } else {
                     while (fin.ready() && lineNr < burninCount) {
                         final String str = nextLine();
@@ -242,9 +245,9 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                             return;
                         }
                         if (str.trim().length() > 2 && !str.trim().startsWith("#")) {
-                        	lineNr++;
+                            lineNr++;
                         }
-                    }                	
+                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -253,10 +256,11 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         } // parseFile
 
         /**
-         * read next line from Nexus file that is not a comment and not empty 
+         * read next line from Nexus file that is not a comment and not empty
+         *
          * @throws IOException *
          */
-        String nextLine() throws IOException  {
+        String nextLine() throws IOException {
             String str = readLine();
             if (str == null) {
                 return null;
@@ -290,14 +294,14 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
             return fin.readLine();
         }
 
-        private void parseTreesBlock() throws IOException  {
+        private void parseTreesBlock() throws IOException {
             // read to first non-empty line within trees block
-        	fin.mark(1024*1024);
-        	int lineNr = this.lineNr;
+            fin.mark(1024 * 1024);
+            int lineNr = this.lineNr;
             String str = readLine().trim();
             while (str.equals("")) {
-            	fin.mark(1024*1024);
-            	lineNr = this.lineNr;
+                fin.mark(1024 * 1024);
+                lineNr = this.lineNr;
                 str = readLine().trim();
             }
 
@@ -309,16 +313,16 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                     taxa = getIndexedTranslationMap(translationMap, origin);
                 }
             } else {
-            	this.lineNr = lineNr;
-            	fin.reset();
+                this.lineNr = lineNr;
+                fin.reset();
             }
             // we got to the end of the translate block
             // read burninCount trees
             current = 0;
             while (current < burninCount && fin.ready()) {
-    			str = nextLine();
+                str = nextLine();
                 if (str.trim().toLowerCase().startsWith("tree ")) {
-                	current++;
+                    current++;
                 }
             }
         }
@@ -357,7 +361,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 
         /**
          * @return a map of taxa translations, keys are generally integer node number starting from 1
-         *         whereas values are generally descriptive strings.
+         * whereas values are generally descriptive strings.
          * @throws IOException
          */
         private Map<String, String> parseTranslateBlock() throws IOException {
@@ -383,22 +387,21 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
             return translationMap;
         }
 
-    	
-    	
-    	@Override
-    	public boolean hasNext() {
-    		return current < totalTrees;
-    	}
-    	
-    	@Override
-    	public Tree next() throws IOException {
-			String str = nextLine();
-    		if (!isNexus) {
+
+        @Override
+        public boolean hasNext() {
+            return current < totalTrees;
+        }
+
+        @Override
+        public Tree next() throws IOException {
+            String str = nextLine();
+            if (!isNexus) {
                 TreeParser treeParser;
                 if (taxa == null) {
-                	collectTaxaNames(str);
+                    collectTaxaNames(str);
                 }
-            	current++;
+                current++;
 
                 if (origin != -1) {
                     treeParser = new TreeParser(taxa, str, origin, false);
@@ -410,20 +413,20 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                     }
                 }
                 return treeParser;
-    		}
-    		
+            }
+
             // read trees from NEXUS file
             if (str.trim().toLowerCase().startsWith("tree ")) {
-            	current++;
+                current++;
                 final int i = str.indexOf('(');
 
                 String id = "" + current;
                 try {
-	                 id = str.substring(5, i).split("=")[0].trim();
+                    id = str.substring(5, i).split("=")[0].trim();
                 } catch (Exception e) {
-                	// ignore
+                    // ignore
                 }
-                
+
                 if (i > 0) {
                     str = str.substring(i);
                 }
@@ -441,56 +444,57 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 
                 //if (translationMap != null) treeParser.translateLeafIds(translationMap);
                 treeParser.setID(id);
-                
+
                 return treeParser;
             }
-    		return null;
-    	}
-    	
-    	private void collectTaxaNames(String str) {
-    		taxa = new ArrayList<>();
-    		int i = 0;
-    		while (i < str.length()) {
-    			char c = str.charAt(i);
-    			switch (c) {
-    			case '(':
-    			case ')':
-    			case ',':
-    				// ignore
-    				i++;
-    				break;
-    			case '[':
-    				// eat up meta data
-    				while (i < str.length() && str.charAt(i) != ']') {
-    					i++;
-    				}
-    				break;
-    			case ':':
-    				// eat up length
-    				while (i < str.length() && !(str.charAt(i) == ')'|| str.charAt(i) == ',')) {
-    					i++;
-    				}
-    				break;
-    			default:
-    				StringBuilder b = new StringBuilder();
-    				boolean done = false;
-    				while (i < str.length() && !done) {
-    					c = str.charAt(i);
-    					done =  c == ')' || c == ':' || c == ',' || c == '(' || c == '[';
-    					if (!done) {
-    						if (c != '\'' && c != '"') {
-    							b.append(c);
-    						}
-    						i++;
-    					} else {
-    						taxa.add(b.toString());
-    					}
-    				}
-    				
-    			}
-    		}		
-    	}
+            return null;
+        }
+
+        private void collectTaxaNames(String str) {
+            taxa = new ArrayList<>();
+            int i = 0;
+            while (i < str.length()) {
+                char c = str.charAt(i);
+                switch (c) {
+                    case '(':
+                    case ')':
+                    case ',':
+                        // ignore
+                        i++;
+                        break;
+                    case '[':
+                        // eat up meta data
+                        while (i < str.length() && str.charAt(i) != ']') {
+                            i++;
+                        }
+                        break;
+                    case ':':
+                        // eat up length
+                        while (i < str.length() && !(str.charAt(i) == ')' || str.charAt(i) == ',')) {
+                            i++;
+                        }
+                        break;
+                    default:
+                        StringBuilder b = new StringBuilder();
+                        boolean done = false;
+                        while (i < str.length() && !done) {
+                            c = str.charAt(i);
+                            done = c == ')' || c == ':' || c == ',' || c == '(' || c == '[';
+                            if (!done) {
+                                if (c != '\'' && c != '"') {
+                                    b.append(c);
+                                }
+                                i++;
+                            } else {
+                                taxa.add(b.toString());
+                            }
+                        }
+
+                }
+            }
+        }
     }
+
     TreeSet treeSet;
 
 
@@ -506,7 +510,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         }
 
         @Override
-		public String toString() {
+        public String toString() {
             return desc;
         }
     }
@@ -537,47 +541,48 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 //    private final String location2Attribute = "longLat2";
 //    private final String locationOutputAttribute = "location";
 
-    public TreeAnnotator() { }
+    public TreeAnnotator() {
+    }
 
     public void run(final int burninPercentage,
-    					 boolean lowMemory, // allowSingleChild was defunct (always set to false), now replaced by flag to say how much 
-                         // HeightsSummary heightsOption,
-                         double posteriorLimit,
-                         double hpd2D,
-                         // Target targetOption,
-                         String targetTreeFileName,
-                         String inputFileName,
-                         String outputFileName
-    ) throws IOException  {
+                    boolean lowMemory, // allowSingleChild was defunct (always set to false), now replaced by flag to say how much
+                    // HeightsSummary heightsOption,
+                    double posteriorLimit,
+                    double hpd2D,
+                    // Target targetOption,
+                    String targetTreeFileName,
+                    String inputFileName,
+                    String outputFileName
+    ) throws IOException {
 
         topologySettingService = getTopologySettingService();
         nodeHeightSettingService = getNodeHeightSettingService();
 
-     // Get citations, only print if eihter of them is not empty.
-        
+        // Get citations, only print if eihter of them is not empty.
+
 
         String nodeCitation = nodeHeightSettingService.getCitations();
- 
+
 
         String topoCitation = topologySettingService.getCitations();
- 
+
         if (!nodeCitation.isBlank() || !topoCitation.isBlank()) {
             Log.warning("======================================================");
             Log.warning("Please cite the following when using the summary tree:\n");
             if (!nodeCitation.isBlank()) {
-            	Log.warning(nodeCitation);
+                Log.warning(nodeCitation);
             }
             // If both citations are present, print a separator line
             if (!nodeCitation.isBlank() && !topoCitation.isBlank()) {
-            	Log.warning("\n-----------------------------------------------------\n");
+                Log.warning("\n-----------------------------------------------------\n");
             }
             if (!topoCitation.isBlank()) {
-            	Log.warning(topoCitation);
+                Log.warning(topoCitation);
             }
             Log.warning("======================================================");
- 
+
         }  // Finished printing citations
- 
+
 
         this.posteriorLimit = posteriorLimit;
         this.hpd2D = hpd2D;
@@ -589,17 +594,17 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         totalTreesUsed = 0;
 
         try {
-        	if (lowMemory) {
-        		treeSet = new MemoryFriendlyTreeSet(inputFileName, burninPercentage);
-        	} else {
-        		treeSet = new FastTreeSet(inputFileName, burninPercentage);
-        	}
+            if (lowMemory) {
+                treeSet = new MemoryFriendlyTreeSet(inputFileName, burninPercentage);
+            } else {
+                treeSet = new FastTreeSet(inputFileName, burninPercentage);
+            }
         } catch (Exception e) {
-        	e.printStackTrace();
-        	Log.err.println("Error Parsing Input Tree: " + e.getMessage());
-        	return;
+            e.printStackTrace();
+            Log.err.println("Error Parsing Input Tree: " + e.getMessage());
+            return;
         }
-        
+
         if (!topologySettingService.getServiceName().equals(UserTargetTreeTopologyService.SERVICE_NAME)) {
             // even when a user specified target tree is provided we still need to count the totalTreesUsed for subsequent steps.
             treeSet.reset();
@@ -611,8 +616,10 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                     Log.err.println("A tree with a sampled ancestor is found. Turning on\n the sampled ancestor " +
                             "summary analysis.");
                     if (nodeHeightSettingService.getServiceName().equals("CA")) {
-                        throw new RuntimeException("The common ancestor height is not \n available for trees with sampled " +
-                                "ancestors. Please choose \n another height summary option");
+//                        throw new RuntimeException("The common ancestor height is not \n available for trees with sampled " +
+//                                "ancestors. Please choose \n another height summary option");
+                        throw new RuntimeException("Common ancestor height is unavailable for trees with sampled ancestors.\n" +
+                                "Please select a different height summary option.");
                     }
                 }
                 totalTreesUsed++;
@@ -621,9 +628,9 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 
         Tree targetTree = topologySettingService.setTopology(treeSet, progressStream, this);
 
-     
+
         cladeSystem = getCladeSystem(targetTree);
-        
+
 //        progressStream.println("Collecting node information...");
 //        progressStream.println("0              25             50             75            100");
 //        progressStream.println("|--------------|--------------|--------------|--------------|");
@@ -656,7 +663,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 //                totalTreesUsedNew++;
 //                counter++;
 //        	}
-//        	
+//
 //            cladeSystem.removeClades(targetTree.getRoot(), true);
 //            this.totalTreesUsed = totalTreesUsedNew;
 //            cladeSystem.calculateCladeCredibilities(totalTreesUsedNew);
@@ -677,14 +684,14 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 //                setTreeHeightsByCA(targetTree, targetOption);
 //            }
         } catch (Exception e) {
-        	e.printStackTrace();
+            e.printStackTrace();
             Log.err.println("Error to annotate tree: " + e.getMessage() + "\nPlease check the tree log file format.");
             return;
         }
 
         progressStream.println("Writing annotated tree....");
 
-        
+
         processMetaData(targetTree.getRoot());
         try {
             final PrintStream stream = outputFileName != null ?
@@ -692,10 +699,10 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                     System.out;
             targetTree.init(stream);
             stream.println();
-            
-            stream.print("tree TREE_" + 
-            		topologySettingService.getServiceName() + "_" + 
-            		nodeHeightSettingService.getServiceName() + " = ");
+
+            stream.print("tree TREE_" +
+                    topologySettingService.getServiceName() + "_" +
+                    nodeHeightSettingService.getServiceName() + " = ");
             int[] dummy = new int[1];
             String newick = targetTree.getRoot().toSortedNewick(dummy, true);
             stream.print(newick);
@@ -712,41 +719,41 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
     }
 
     private void processMetaData(Node node) {
-		for (Node child : node.getChildren()) {
-			processMetaData(child);
-		}
-		Set<String> metaDataNames = node.getMetaDataNames(); 
-		if (metaDataNames != null && !metaDataNames.isEmpty()) {
-			String metadata = "";
-			for (String name : metaDataNames) {
-				Object value = node.getMetaData(name);
-				metadata += name + "=";
-				if (value instanceof Object[]) {
-					Object [] values = (Object[]) value;
-					metadata += "{";
-					for (int i = 0; i < values.length; i++) {
-						metadata += values[i].toString();
-						if (i < values.length - 1) {
-							metadata += ",";
-						}
-					}
-					metadata += "}";
-				} else {
-					 metadata += value.toString();
-				}
-				metadata += ",";
-			}
-			metadata = metadata.substring(0, metadata.length() - 1);
-			node.metaDataString = metadata;
-		}		
-	}
+        for (Node child : node.getChildren()) {
+            processMetaData(child);
+        }
+        Set<String> metaDataNames = node.getMetaDataNames();
+        if (metaDataNames != null && !metaDataNames.isEmpty()) {
+            String metadata = "";
+            for (String name : metaDataNames) {
+                Object value = node.getMetaData(name);
+                metadata += name + "=";
+                if (value instanceof Object[]) {
+                    Object[] values = (Object[]) value;
+                    metadata += "{";
+                    for (int i = 0; i < values.length; i++) {
+                        metadata += values[i].toString();
+                        if (i < values.length - 1) {
+                            metadata += ",";
+                        }
+                    }
+                    metadata += "}";
+                } else {
+                    metadata += value.toString();
+                }
+                metadata += ",";
+            }
+            metadata = metadata.substring(0, metadata.length() - 1);
+            node.metaDataString = metadata;
+        }
+    }
 
-	private void setupAttributes(Tree tree) {
+    private void setupAttributes(Tree tree) {
         for (int i = 0; i < tree.getNodeCount(); i++) {
             Node node = tree.getNode(i);
             Set<String> iter = node.getMetaDataNames();
             if (iter != null) {
-            	for (String name : iter) {
+                for (String name : iter) {
                     attributeNames.add(name);
                 }
             }
@@ -758,7 +765,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         }
     }
 
-    private Tree summarizeTrees(CladeSystem cladeSystem, boolean useSumCladeCredibility) throws IOException  {
+    private Tree summarizeTrees(CladeSystem cladeSystem, boolean useSumCladeCredibility) throws IOException {
 
         Tree bestTree = null;
         double bestScore = Double.NEGATIVE_INFINITY;
@@ -773,18 +780,18 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         int counter = 0;
         treeSet.reset();
         while (treeSet.hasNext()) {
-        	Tree tree = treeSet.next();
+            Tree tree = treeSet.next();
             double score = scoreTree(tree, cladeSystem, useSumCladeCredibility);
-          if (score > bestScore) {
-              bestTree = tree;
-              bestScore = score;
-          }
-		  while (reported < 61 && 1000.0*reported < 61000.0 * (counter + 1) / totalTreesUsed) {
-              progressStream.print("*");
-              reported++;
-              progressStream.flush();
-    	  }
-          counter++;
+            if (score > bestScore) {
+                bestTree = tree;
+                bestScore = score;
+            }
+            while (reported < 61 && 1000.0 * reported < 61000.0 * (counter + 1) / totalTreesUsed) {
+                progressStream.print("*");
+                reported++;
+                progressStream.flush();
+            }
+            counter++;
         }
         progressStream.println();
         progressStream.println();
@@ -813,7 +820,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         if (node.isLeaf()) {
 
             int index = cladeSystem.getTaxonIndex(node);
-            bits2.set(2*index);
+            bits2.set(2 * index);
 
             annotateNode(cladeSystem, node, bits2, true);//, heightsOption);
         } else {
@@ -825,7 +832,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                 annotateTree(cladeSystem, node1, bits2);//, heightsOption);
             }
 
-            for (int i=1; i<bits2.length(); i=i+2) {
+            for (int i = 1; i < bits2.length(); i = i + 2) {
                 bits2.set(i, false);
             }
             if (node.isFake() && processSA) {
@@ -923,8 +930,10 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                                 Object[] array = (Object[]) value;
                                 for (int k = 0; k < lenArray; k++) {
                                     valuesArray[k][j] = ((Double) array[k]);
-                                    if (valuesArray[k][j] < minValueArray[k]) minValueArray[k] = valuesArray[k][j];
-                                    if (valuesArray[k][j] > maxValueArray[k]) maxValueArray[k] = valuesArray[k][j];
+                                    if (valuesArray[k][j] < minValueArray[k])
+                                        minValueArray[k] = valuesArray[k][j];
+                                    if (valuesArray[k][j] > maxValueArray[k])
+                                        maxValueArray[k] = valuesArray[k][j];
                                 }
                             } catch (Exception e) {
                                 // ignore
@@ -939,7 +948,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                         }
                     }
                     if (isHeight) {
-                    	nodeHeightSettingService.setNodeHeight(node, values, this);
+                        nodeHeightSettingService.setNodeHeight(node, values, this);
 //                        if (heightsOption == HeightsSummary.MEAN_HEIGHTS) {
 //                            final double mean = DiscreteStatistics.mean(values);
 //                            if (node.isDirectAncestor()) {
@@ -1118,7 +1127,6 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
     }
 
 
-
     public static final String CORDINATE = "cordinates";
 
     private String formattedLocation(double x) {
@@ -1178,7 +1186,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
     TaxonSet taxa = null;
 
     static boolean processBivariateAttributes = true;
-    
+
     public static void printTitle() {
         progressStream.println();
         centreLine("TreeAnnotator " + version.getVersionString() + ", " + version.getDateString(), 60);
@@ -1220,7 +1228,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 //    static private Controller controller;
 //
 //    @Override
-//	protected void createDialog() {		
+//	protected void createDialog() {
 //		PrintStream err = System.err;
 //		System.setErr(new PrintStream(new OutputStream() {
 //		    public void write(int b) {
@@ -1248,11 +1256,11 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 //
 //        // The ConsoleApplication will have overridden System.out so set progressStream
 //        // to capture the output to the window:
-//        // new beastfx.app.util.Console();            
+//        // new beastfx.app.util.Console();
 //        progressStream = System.out;
 //
 //        printTitle();
-//        
+//
 //	        	try {
 //					Dialog<String> dialog = new Dialog<>();
 //				    dialog.setTitle("TreeAnnotator " + BEASTVersion.INSTANCE.getVersion());
@@ -1261,21 +1269,21 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 //				    fl.setLocation(TreeAnnotator2.class.getResource("TreeAnnotator.fxml"));
 //				    DialogPane root = fl.load();
 //				    dialog.setDialogPane(root);
-//			
+//
 //				    ButtonType run = new ButtonType("Run", ButtonData.OK_DONE);
 //				    dialog.getDialogPane().getButtonTypes().add(run);
 //				    ButtonType cancel = new ButtonType("Quit", ButtonData.CANCEL_CLOSE);
 //				    dialog.getDialogPane().getButtonTypes().add(cancel);
 //				    ThemeProvider.loadStyleSheet(dialog.getDialogPane().getScene());
-//				    
-//				    
+//
+//
 //					//Showing the dialog on clicking the button
 //			        Optional<String> result = dialog.showAndWait();
 //			        dialog.close();
-//			        
+//
 //			        Object o = result.get();
 //			        String str = o.toString();
-//			        
+//
 //				    if (str.equals(run.toString())) {
 //					    controller = fl.getController();
 //			        	controller.run(null);
@@ -1352,42 +1360,42 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         // There is a major issue with languages that use the comma as a decimal separator.
         // To ensure compatibility between programs in the package, enforce the US locale.
         Locale.setDefault(Locale.US);
-        
+
         PackageManager.loadExternalJars();
-        
+
         if (args.length == 0) {
-        	// show GUI
-        	TAGui.launch(TAGui.class, args);
-        	return;
+            // show GUI
+            TAGui.launch(TAGui.class, args);
+            return;
         }
-        
+
         try {
-	        TreeAnnotator annotator = new TreeAnnotator();
-	        Application app = new Application(annotator);
-	        annotator.filesInput.determineClass(annotator);
-	        app.setDefaultInput(annotator.filesInput);
-	        app.parseArgs(args, true);
-	        annotator.initAndValidate();
-	        annotator.run();
+            TreeAnnotator annotator = new TreeAnnotator();
+            Application app = new Application(annotator);
+            annotator.filesInput.determineClass(annotator);
+            app.setDefaultInput(annotator.filesInput);
+            app.parseArgs(args, true);
+            annotator.initAndValidate();
+            annotator.run();
         } catch (OutOfMemoryError e) {
-        	Log.warning("TreeAnnotator ran out of memory: " + e.getMessage());
-        	Log.warning("You can subsample the tree set with LogCombiner or provide more memory to fix this.");
-        	Log.warning("See https://www.beast2.org/increasing-memory-usage/ on how to provide more memory");
+            Log.warning("TreeAnnotator ran out of memory: " + e.getMessage());
+            Log.warning("You can subsample the tree set with LogCombiner or provide more memory to fix this.");
+            Log.warning("See https://www.beast2.org/increasing-memory-usage/ on how to provide more memory");
         }
     }
 
-	@Override
-    public void initAndValidate() {
-    	
-    }
-    
     @Override
-	public void run() throws Exception {
+    public void initAndValidate() {
 
-    	for (String versionFile : versionFileInput.get()) {
-    		BEASTClassLoader.addServices(versionFile);
-    	}
-    	
+    }
+
+    @Override
+    public void run() throws Exception {
+
+        for (String versionFile : versionFileInput.get()) {
+            BEASTClassLoader.addServices(versionFile);
+        }
+
         String targetTreeFileName = null;
         String inputFileName = null;
         String outputFileName = null;
@@ -1396,11 +1404,11 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         printTitle();
 
         if (nohpd2DInput.get() != null && nohpd2DInput.get()) {
-        	processBivariateAttributes = false;
+            processBivariateAttributes = false;
         }
-        
+
         if (noSAInput.get() != null && noSAInput.get()) {
-        	processSA = false;
+            processSA = false;
         }
 
         if (forceDiscreteInput.get() != null && forceDiscreteInput.get()) {
@@ -1412,13 +1420,13 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 //            printUsage(arguments);
 //            System.exit(0);
 //        }
-        
+
         boolean lowMem = false;
         if (lowMemInput.get() != null && lowMemInput.get()) {
-        	lowMem = true;
+            lowMem = true;
         }
 
-            		
+
 //        HeightsSummary heights = HeightsSummary.CA_HEIGHTS;
 //        if (arguments.hasOption("heights")) {
 //            String value = arguments.getStringOption("heights");
@@ -1436,11 +1444,11 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
 //            Log.warning.println("Please cite: Heled and Bouckaert: Looking for trees in the forest:\n" +
 //                    "summary tree from posterior samples. BMC Evolutionary Biology 2013 13:221.");
 //        }
-        
+
         int burninPercentage = burnInPercentageInput.get();
         if (burninPercentage >= 100) {
-        	Log.err.println("burnin percentage is " + burninPercentage + " but should be less than 100.");
-        	System.exit(1);
+            Log.err.println("burnin percentage is " + burninPercentage + " but should be less than 100.");
+            System.exit(1);
         }
 
         double posteriorLimit = 0.0;
@@ -1451,22 +1459,15 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         double hpd2D = 0.80;
         if (hpd2DInput.get() != null) {
             hpd2D = hpd2DInput.get();
-            if (hpd2D <= 0 || hpd2D >=1) {
-            	Log.err.println("hpd2D is a fraction and should be in between 0.0 and 1.0.");
-            	System.exit(1);            	
+            if (hpd2D <= 0 || hpd2D >= 1) {
+                Log.err.println("hpd2D is a fraction and should be in between 0.0 and 1.0.");
+                System.exit(1);
             }
             processBivariateAttributes = true;
         }
 
-
-//        Target target = Target.MAX_CLADE_CREDIBILITY;
-//        if (targetInput.get() != null) {
-//            target = Target.USER_TARGET_TREE;
-//            targetTreeFileName = arguments.getStringOption("target");
-//        }
-
         final List<File> args2 = filesInput.get();
-        		
+
 
         switch (args2.size()) {
             case 2:
@@ -1478,72 +1479,70 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
             default: {
                 Log.err.println("\nCommand not understood: " + args2.get(2).getPath() + "\n");
                 Log.err.println();
-            	new Application(new TreeAnnotator(), "Tree Annotator", new String[] {"-help"});
+                new Application(new TreeAnnotator(), "Tree Annotator", new String[]{"-help"});
                 System.exit(1);
             }
         }
-        
-        try {
-        	run(burninPercentage, lowMem, posteriorLimit, hpd2D, targetTreeFileName, inputFileName, outputFileName);
-        //} catch (IOException e) {
-        //	throw e;
-        } catch (Exception e) {
-			e.printStackTrace();
-		}
 
-//        if (args.length == 0) {
-//        	// only need exit when in GUI mode
-//        	System.exit(0);
-//        }
+        try {
+            run(burninPercentage, lowMem, posteriorLimit, hpd2D, targetTreeFileName, inputFileName, outputFileName);
+        } catch (Exception e) {
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("Common ancestor height")) {
+                Log.err("[Error]:\n  " + msg.replace("\n", "\n  "));
+            } else {
+                e.printStackTrace();
+            }
+        }
     }
 
     private TopologySettingService getTopologySettingService() {
-    	String topology = topologyInput.get();
-    	Set<String> nodeTopologySettingServices = BEASTClassLoader.loadService(TopologySettingService.class);
-    	String topologyServiceNames = "";
+        String topology = topologyInput.get();
+        Set<String> nodeTopologySettingServices = BEASTClassLoader.loadService(TopologySettingService.class);
+        String topologyServiceNames = "";
         for (String str : nodeTopologySettingServices) {
             try {
-            	TopologySettingService nodeTopologySettingService = (TopologySettingService) BEASTClassLoader.forName(str).newInstance();
-            	if (nodeTopologySettingService.getServiceName().equals(topology) || nodeTopologySettingService.getDescription().equals(topology)) {
-            		return nodeTopologySettingService;
-            	}
-            	if (topologyServiceNames.length() > 1) {
-            		topologyServiceNames += ",";
-            	}
-            	topologyServiceNames += nodeTopologySettingService.getServiceName();
+                TopologySettingService nodeTopologySettingService = (TopologySettingService) BEASTClassLoader.forName(str).newInstance();
+                if (nodeTopologySettingService.getServiceName().equals(topology) || nodeTopologySettingService.getDescription().equals(topology)) {
+                    return nodeTopologySettingService;
+                }
+                if (topologyServiceNames.length() > 1) {
+                    topologyServiceNames += ",";
+                }
+                topologyServiceNames += nodeTopologySettingService.getServiceName();
             } catch (Throwable e) {
                 Log.debug("Failed to discover " + str + " " + e.getMessage() + " "
-                		+ "Choose one of these: " + topologyServiceNames);            	
+                        + "Choose one of these: " + topologyServiceNames);
             }
         }
         throw new IllegalArgumentException("Could not find method for setting topology with name " + topology
-        	+ ". Choose one of these: " + topologyServiceNames);	
-	}
+                + ". Choose one of these: " + topologyServiceNames);
+    }
 
-	private NodeHeightSettingService getNodeHeightSettingService() {
+    private NodeHeightSettingService getNodeHeightSettingService() {
         String heights = heightInput.get();
-    	Set<String> nodeHeightSettingServices = BEASTClassLoader.loadService(NodeHeightSettingService.class);
-    	String heightServiceNames = "";
+        Set<String> nodeHeightSettingServices = BEASTClassLoader.loadService(NodeHeightSettingService.class);
+        String heightServiceNames = "";
         for (String str : nodeHeightSettingServices) {
             try {
-            	NodeHeightSettingService nodeHeightSettingService = (NodeHeightSettingService) BEASTClassLoader.forName(str).newInstance();
-            	if (nodeHeightSettingService.getServiceName().equals(heights) || nodeHeightSettingService.getDescription().equals(heights)) {
-            		return nodeHeightSettingService;
-            	}
-            	if (heightServiceNames.length() > 1) {
-            		heightServiceNames += ",";
-            	}
-            	heightServiceNames += nodeHeightSettingService.getServiceName();
+                NodeHeightSettingService nodeHeightSettingService = (NodeHeightSettingService) BEASTClassLoader.forName(str).newInstance();
+                if (nodeHeightSettingService.getServiceName().equals(heights) || nodeHeightSettingService.getDescription().equals(heights)) {
+                    return nodeHeightSettingService;
+                }
+                if (heightServiceNames.length() > 1) {
+                    heightServiceNames += ",";
+                }
+                heightServiceNames += nodeHeightSettingService.getServiceName();
             } catch (Throwable e) {
                 Log.debug("Failed to discover " + str + " " + e.getMessage() + " "
-                		+ "Choose one of these: " + heightServiceNames);            	
+                        + "Choose one of these: " + heightServiceNames);
             }
         }
-        throw new IllegalArgumentException("Could not find method for setting node height with name " + heights 
-        		+ ". Choose one of these: " + heightServiceNames);	
-	}
+        throw new IllegalArgumentException("Could not find method for setting node height with name " + heights
+                + ". Choose one of these: " + heightServiceNames);
+    }
 
-	/**
+    /**
      * @author Andrew Rambaut
      * @version $Id$
      */
@@ -1554,158 +1553,65 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         boolean handleAttribute(Node node, String attributeName, double[] values);
     }
 
-    boolean setTreeHeightsByCA(Tree targetTree, Target targetOption) throws IOException
-             {
-        progressStream.println("Setting node heights...");
-        progressStream.println("0              25             50             75            100");
-        progressStream.println("|--------------|--------------|--------------|--------------|");
+    private CladeSystem cladeSystem = null;
 
-        int reportStepSize = totalTreesUsed / 60;
-        if (reportStepSize < 1) reportStepSize = 1;
-        int reported = 0;
-
-
-        // this call increments the clade counts and it shouldn't
-        // this is remedied with removeClades call after while loop below
-        CladeSystem cladeSystem = new CladeSystem(targetTree);
-        final int clades = cladeSystem.getCladeMap().size();
-
-        // allocate posterior tree nodes order once
-        int[] postOrderList = new int[clades];
-        BitSet[] ctarget = new BitSet[clades];
-        BitSet[] ctree = new BitSet[clades];
-
-        for (int k = 0; k < clades; ++k) {
-            ctarget[k] = new BitSet();
-            ctree[k] = new BitSet();
-        }
-
-        cladeSystem.getTreeCladeCodes(targetTree, ctarget);
-
-        // temp collecting heights inside loop allocated once
-        double[][] hs = new double[clades][treeSet.totalTrees - treeSet.burninCount];
-
-        // heights total sum from posterior trees
-        double[] ths = new double[clades];
-
-        int totalTreesUsed = 0;
-
-        int counter = 0;
-        treeSet.reset();
-        while (treeSet.hasNext()) {
-        	Tree tree = treeSet.next();
-            TreeUtils.preOrderTraversalList(tree, postOrderList);
-            cladeSystem.getTreeCladeCodes(tree, ctree);
-            for (int k = 0; k < clades; ++k) {
-                int j = postOrderList[k];
-                for (int i = 0; i < clades; ++i) {
-                    if( CollectionUtils.isSubSet(ctarget[i], ctree[j]) ) {
-                        hs[i][counter] = tree.getNode(j).getHeight();
+    public CladeSystem getCladeSystem() {
+        burninPercentage = burnInPercentageInput.get();
+        CladeSystem cladeSystem = new CladeSystem();
+        try {
+            treeSet.reset();
+            totalTreesUsed = 0;
+            cladeSystem.setProcessSA(false);
+            while (treeSet.hasNext()) {
+                Tree tree = treeSet.next();
+                tree.getLeafNodeCount();
+                if (tree.getDirectAncestorNodeCount() > 0 && !SAmode && processSA) {
+                    SAmode = true;
+                    Log.err.println("A tree with a sampled ancestor is found. Turning on\n the sampled ancestor " +
+                            "summary analysis.");
+                    if (nodeHeightSettingService.getServiceName().equals("CA")) {
+//                        throw new RuntimeException("The common ancestor height is not \n available for trees with sampled " +
+//                                "ancestors. Please choose \n another height summary option");
+                        throw new RuntimeException("Common ancestor height is unavailable for trees with sampled ancestors.\n" +
+                                "Please select a different height summary option.");
                     }
+                    cladeSystem.setProcessSA(true);
                 }
+                cladeSystem.add(tree, false);
+                totalTreesUsed++;
             }
-            for (int k = 0; k < clades; ++k) {
-                ths[k] += hs[k][counter];
-            }
-            totalTreesUsed += 1;
-			while (reported < 61 && 1000.0*reported < 61000.0 * (counter + 1) / this.totalTreesUsed) {
-		          progressStream.print("*");
-		          reported++;
-		          progressStream.flush();
-			}
-            counter++;
-
+            totalTrees = totalTreesUsed * 100 / (100 - Math.max(burninPercentage, 0));
+        } catch (Exception e) {
+            Log.err.println(e.getMessage());
+            return null;
         }
 
-        if (targetOption != Target.USER_TARGET_TREE)
-            targetTree.initAndValidate();
-
-        cladeSystem.removeClades(targetTree.getRoot(), true);
-        for (int k = 0; k < clades; ++k) {
-            ths[k] /= totalTreesUsed;
-            final Node node = targetTree.getNode(k);
-            node.setHeight(ths[k]);
-            String attributeName = "CAheight";
-            double [] values = hs[k];
-            double min = values[0];
-            double max = values[0];
-            for (double d : values) {
-            	min = Math.min(d, min);
-            	max = Math.max(d, max);
-            }
-            if (Math.abs(min - max) > 1e-10) {
-	            annotateMeanAttribute(node, attributeName + "_mean", values);
-	            annotateMedianAttribute(node, attributeName + "_median", values);
-	            annotateHPDAttribute(node, attributeName + "_95%_HPD", 0.95, values);
-	            annotateRangeAttribute(node, attributeName + "_range", values);
-            }
-        }
-
-        assert (totalTreesUsed == this.totalTreesUsed);
-        this.totalTreesUsed = totalTreesUsed;
         progressStream.println();
         progressStream.println();
 
-        return true;
+        if (totalTrees < 1) {
+            Log.err.println("No trees");
+            return null;
+        }
+        if (totalTreesUsed <= 1) {
+            if (burninPercentage > 0) {
+                Log.err.println("No trees to use: burnin too high");
+                return null;
+            }
+        }
+        cladeSystem.calculateCladeCredibilities(totalTreesUsed);
+
+        progressStream.println("Total number of trees " + totalTrees + ", where " + totalTreesUsed + " are used.");
+
+        progressStream.println("Total unique clades: " + cladeSystem.getCladeMap().keySet().size());
+        progressStream.println();
+        return cladeSystem;
     }
 
-    private CladeSystem cladeSystem = null;
-    
-	public CladeSystem getCladeSystem() {
-		burninPercentage = burnInPercentageInput.get();
-        CladeSystem cladeSystem = new CladeSystem();
-	    try {
-	    	treeSet.reset();
-	    	totalTreesUsed = 0;
-	        cladeSystem.setProcessSA(false);
-	    	while (treeSet.hasNext()) {
-	    		Tree tree = treeSet.next();
-	            tree.getLeafNodeCount();
-	            if (tree.getDirectAncestorNodeCount() > 0 && !SAmode && processSA) {
-	                SAmode = true;
-	                Log.err.println("A tree with a sampled ancestor is found. Turning on\n the sampled ancestor " +
-	                        "summary analysis.");
-	                if (nodeHeightSettingService.getServiceName().equals("CA")) {
-	                    throw new RuntimeException("The common ancestor height is not \n available for trees with sampled " +
-	                            "ancestors. Please choose \n another height summary option");
-	                }
-	                cladeSystem.setProcessSA(true);
-	            }
-	        	cladeSystem.add(tree, false);
-	            totalTreesUsed++;
-	        }
-	        totalTrees = totalTreesUsed * 100 / (100-Math.max(burninPercentage, 0));
-	    } catch (Exception e) {
-	    	Log.err.println(e.getMessage());
-	        return null;
-	    }
-	
-	    progressStream.println();
-	    progressStream.println();
-	
-	    if (totalTrees < 1) {
-	    	Log.err.println("No trees");
-	        return null;
-	    }
-	    if (totalTreesUsed <= 1) {
-	        if (burninPercentage > 0) {
-	            Log.err.println("No trees to use: burnin too high");
-	            return null;
-	        }
-	    }
-	    cladeSystem.calculateCladeCredibilities(totalTreesUsed);
-	
-	    progressStream.println("Total number of trees " + totalTrees + ", where " + totalTreesUsed + " are used.");
-	
-	    progressStream.println("Total unique clades: " + cladeSystem.getCladeMap().keySet().size());
-	    progressStream.println();
-	    return cladeSystem;
-	}
-
-	public CladeSystem getCladeSystem(Tree targetTree) {
-    	if (cladeSystem != null) {
-    		return cladeSystem;
-    	}
+    public CladeSystem getCladeSystem(Tree targetTree) {
+        if (cladeSystem != null) {
+            return cladeSystem;
+        }
         progressStream.println("Collecting node information...");
         progressStream.println("0              25             50             75            100");
         progressStream.println("|--------------|--------------|--------------|--------------|");
@@ -1723,20 +1629,20 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
             int counter = 0;
             treeSet.reset();
             while (treeSet.hasNext()) {
-            	Tree tree = treeSet.next();
-            	if (counter == 0) {
+                Tree tree = treeSet.next();
+                if (counter == 0) {
                     setupAttributes(tree);
-            	}
+                }
                 cladeSystem.collectAttributes(tree, attributeNames);
-    			while (reported < 61 && 1000.0*reported < 61000.0 * (counter + 1) / this.totalTreesUsed) {
-  		          	progressStream.print("*");
-  		          	reported++;
-  		          	progressStream.flush();
-    			}
+                while (reported < 61 && 1000.0 * reported < 61000.0 * (counter + 1) / this.totalTreesUsed) {
+                    progressStream.print("*");
+                    reported++;
+                    progressStream.flush();
+                }
                 totalTreesUsedNew++;
                 counter++;
-        	}
-        	
+            }
+
             cladeSystem.removeClades(targetTree.getRoot(), true);
             this.totalTreesUsed = totalTreesUsedNew;
             cladeSystem.calculateCladeCredibilities(totalTreesUsedNew);
@@ -1748,12 +1654,26 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         progressStream.println();
         return cladeSystem;
     }
-    
-    public int getTotalTreesUsed() {return totalTreesUsed;}
-    public TreeSet getTreeSet() {return treeSet;}
-    public boolean isProcessSA() {return processSA;}
-    public int getTotalTrees() {return totalTrees;}
-    public int getBurninCount() {return burnInPercentageInput.get();}
+
+    public int getTotalTreesUsed() {
+        return totalTreesUsed;
+    }
+
+    public TreeSet getTreeSet() {
+        return treeSet;
+    }
+
+    public boolean isProcessSA() {
+        return processSA;
+    }
+
+    public int getTotalTrees() {
+        return totalTrees;
+    }
+
+    public int getBurninCount() {
+        return burnInPercentageInput.get();
+    }
 
 
 }
