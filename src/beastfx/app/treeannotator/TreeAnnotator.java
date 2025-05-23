@@ -773,55 +773,8 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         }
     }
 
-    private Tree summarizeTrees(CladeSystem cladeSystem, boolean useSumCladeCredibility) throws IOException {
 
-        Tree bestTree = null;
-        double bestScore = Double.NEGATIVE_INFINITY;
-
-        progressStream.println("Analyzing " + totalTreesUsed + " trees...");
-        progressStream.println("0              25             50             75            100");
-        progressStream.println("|--------------|--------------|--------------|--------------|");
-
-        int stepSize = Math.max(totalTreesUsed / 60, 1);
-        int reported = 0;
-
-        int counter = 0;
-        treeSet.reset();
-        while (treeSet.hasNext()) {
-            Tree tree = treeSet.next();
-            double score = scoreTree(tree, cladeSystem, useSumCladeCredibility);
-            if (score > bestScore) {
-                bestTree = tree;
-                bestScore = score;
-            }
-            while (reported < 61 && 1000.0 * reported < 61000.0 * (counter + 1) / totalTreesUsed) {
-                progressStream.print("*");
-                reported++;
-                progressStream.flush();
-            }
-            counter++;
-        }
-        progressStream.println();
-        progressStream.println();
-        if (useSumCladeCredibility) {
-            progressStream.println("Highest Sum Clade Credibility: " + bestScore);
-        } else {
-            progressStream.println("Highest Log Clade Credibility: " + bestScore);
-        }
-
-        return bestTree;
-    }
-
-    public double scoreTree(Tree tree, CladeSystem cladeSystem, boolean useSumCladeCredibility) {
-        if (useSumCladeCredibility) {
-            return cladeSystem.getSumCladeCredibility(tree.getRoot(), null);
-        } else {
-            return cladeSystem.getLogCladeCredibility(tree.getRoot(), null);
-        }
-    }
-
-
-    private void annotateTree(CladeSystem cladeSystem, Node node, BitSet bits) { //, HeightsSummary heightsOption) {
+    private void annotateTree(CladeSystem cladeSystem, Node node, BitSet bits) {
 
         BitSet bits2 = new BitSet();
 
@@ -830,14 +783,14 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
             int index = cladeSystem.getTaxonIndex(node);
             bits2.set(2 * index);
 
-            annotateNode(cladeSystem, node, bits2, true);//, heightsOption);
+            annotateNode(cladeSystem, node, bits2, true);
         } else {
 
             for (int i = 0; i < node.getChildCount(); i++) {
 
                 Node node1 = node.getChild(i);
 
-                annotateTree(cladeSystem, node1, bits2);//, heightsOption);
+                annotateTree(cladeSystem, node1, bits2);
             }
 
             for (int i = 1; i < bits2.length(); i = i + 2) {
@@ -848,7 +801,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                 bits2.set(2 * index + 1);
             }
 
-            annotateNode(cladeSystem, node, bits2, false);//, heightsOption);
+            annotateNode(cladeSystem, node, bits2, false);
         }
 
         if (bits != null) {
@@ -856,7 +809,7 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
         }
     }
 
-    private void annotateNode(CladeSystem cladeSystem, Node node, BitSet bits, boolean isTip) {//, HeightsSummary heightsOption) {
+    private void annotateNode(CladeSystem cladeSystem, Node node, BitSet bits, boolean isTip) {
         CladeSystem.Clade clade = cladeSystem.getCladeMap().get(bits);
         assert clade != null : "Clade missing?";
 
@@ -957,27 +910,6 @@ public class TreeAnnotator extends beast.base.inference.Runnable {
                     }
                     if (isHeight) {
                         nodeHeightSettingService.setNodeHeight(node, values, this);
-//                        if (heightsOption == HeightsSummary.MEAN_HEIGHTS) {
-//                            final double mean = DiscreteStatistics.mean(values);
-//                            if (node.isDirectAncestor()) {
-//                                node.getParent().setHeight(mean);
-//                            }
-//                            if (node.isFake() && processSA) {
-//                                node.getDirectAncestorChild().setHeight(mean);
-//                            }
-//                            node.setHeight(mean);
-//                        } else if (heightsOption == HeightsSummary.MEDIAN_HEIGHTS) {
-//                            final double median = DiscreteStatistics.median(values);
-//                            if (node.isDirectAncestor()) {
-//                                node.getParent().setHeight(median);
-//                            }
-//                            if (node.isFake() && processSA) {
-//                                node.getDirectAncestorChild().setHeight(median);
-//                            }
-//                            node.setHeight(median);
-//                        } else {
-//                            // keep the existing height
-//                        }
                     }
 
                     if (!filter) {
